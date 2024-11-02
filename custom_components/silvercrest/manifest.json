@@ -1,0 +1,13 @@
+{
+  "version": "21.0.0",
+  "domain": "silvercrest",
+  "name": "Silvercrest",
+  "documentation": "",
+  "requirements": [
+    "pycryptodome>=3.6.6"
+  ],
+  "dependencies": [],
+  "codeowners": [
+    "@max-te"
+  ]
+}

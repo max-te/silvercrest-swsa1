@@ -1,0 +1,17 @@
+[project]
+name = "homeassistant-silvercrest-swsa1"
+version = "0.1.0"
+description = "Home Assistant Component for Silvercrest SWS-A1 Smart Plugs"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "homeassistant==2024.10.0",
+    "pycryptodome>=3.6.6",
+    "voluptuous>=0.15.2",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+reportUnknownMemberType = false
+
