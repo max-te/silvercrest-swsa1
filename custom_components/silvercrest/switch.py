@@ -5,7 +5,8 @@ Platform for Silvercrest SWS A1 Wifi Switches
 import socket
 from typing import Any, Literal
 from typing_extensions import override
-from Crypto.Cipher import AES
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
 
 from functools import cached_property
 from homeassistant.core import HomeAssistant
@@ -47,15 +48,26 @@ def setup_platform(
     add_devices([SilvercrestSwitch(hass, host, name)], True)
 
 
+SILVERCREST_AES_KEY = b"0123456789abcdef"
+SILVERCREST_AES_IV = b"0123456789abcdef"
+SILVERCREST_UDP_PORT = 8530
+
+
 class SilvercrestSwitch(SwitchEntity):
     _state: None | Literal["on"] | Literal["off"]
     _host: str
     _name: str
+    _aes: Cipher[modes.CBC]
 
     def __init__(self, hass: HomeAssistant, host: str, name: str):
         self._state = None
         self._host = host
         self._name = name
+        self._aes = Cipher(
+            algorithms.AES(SILVERCREST_AES_KEY),
+            modes.CBC(SILVERCREST_AES_IV),
+            backend=default_backend(),
+        )
 
     def _sendMsg(self, msg: str):
         mac = "FF FF FF FF FF FF"  # This works as broadcast
@@ -64,11 +76,10 @@ class SilvercrestSwitch(SwitchEntity):
             "00 ff ff c1 11 71 50"  # FF FF is a package counter, if you want it.
         )
         unencmsg = bytes.fromhex(preamble2 + msg)
-        encmsg = AES.new(
-            b"0123456789abcdef", AES.MODE_CBC, b"0123456789abcdef"
-        ).encrypt(unencmsg)
+        encryptor = self._aes.encryptor()
+        encmsg = encryptor.update(unencmsg) + encryptor.finalize()
 
-        port = 8530
+        port = SILVERCREST_UDP_PORT
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         s.settimeout(0.5)
         s.bind(("", port))
@@ -77,9 +88,10 @@ class SilvercrestSwitch(SwitchEntity):
             s.sendall(preamble1 + encmsg)
 
             response = s.recv(1024)
-            return AES.new(
-                b"0123456789abcdef", AES.MODE_CBC, b"0123456789abcdef"
-            ).decrypt(response[9:])[7:]
+            decryptor = self._aes.decryptor()
+            response = decryptor.update(response[9:]) + decryptor.finalize()
+            response = response[7:]
+            return response
         except socket.timeout:
             return None
         finally:

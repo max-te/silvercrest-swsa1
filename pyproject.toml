@@ -5,8 +5,8 @@ description = "Home Assistant Component for Silvercrest SWS-A1 Smart Plugs"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=43.0.1",
     "homeassistant==2024.10.0",
-    "pycryptodome>=3.6.6",
     "voluptuous>=0.15.2",
 ]
 
@@ -14,4 +14,3 @@ dependencies = [
 venvPath = "."
 venv = ".venv"
 reportUnknownMemberType = false
-

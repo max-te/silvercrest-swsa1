@@ -4,7 +4,7 @@
   "name": "Silvercrest",
   "documentation": "",
   "requirements": [
-    "pycryptodome>=3.6.6"
+    "cryptography>=43.0.1"
   ],
   "dependencies": [],
   "codeowners": [
