@@ -1,8 +1,9 @@
 [project]
-name = "homeassistant-silvercrest-swsa1"
-version = "0.1.0"
+name = "silvercrest"
+version = "21.1.0"
 description = "Home Assistant Component for Silvercrest SWS-A1 Smart Plugs"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "cryptography>=43.0.1",
