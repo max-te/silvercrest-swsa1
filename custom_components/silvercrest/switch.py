@@ -1,25 +1,26 @@
 """
-Platform for Silvercrest SWS A1 Wifi Switches
+Switch implementation for Silvercrest SWS A1 Wifi Switches
 
 Reference https://wiki.fhem.de/wiki/Silvercrest_SWS_A1_Wifi for protocol details.
 """
 
 import socket
 from typing import Any, Literal
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from typing_extensions import override
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
+import voluptuous as vol
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+import homeassistant.helpers.config_validation as cv
+
 
 from functools import cached_property
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-import voluptuous as vol
 
-import homeassistant.helpers.config_validation as cv
 from homeassistant.components.switch import (
     SwitchEntity,
-    PLATFORM_SCHEMA as PLATFORM_SCHEMA_BASE,
+    PLATFORM_SCHEMA as PLATFORM_SCHEMA_SWITCH,
 )
 from homeassistant.const import (
     CONF_HOST,
@@ -27,10 +28,14 @@ from homeassistant.const import (
     STATE_ON,
     STATE_OFF,
 )
+from .const import DEFAULT_NAME
 
-DEFAULT_NAME = "Silvercrest SWS A1"
+AES_KEY = b"0123456789abcdef"
+AES_IV = b"0123456789abcdef"
+UDP_PORT = 8530
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA_BASE.extend(
+
+PLATFORM_SCHEMA = PLATFORM_SCHEMA_SWITCH.extend(
     {
         vol.Required(CONF_HOST): cv.string,
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
@@ -39,7 +44,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA_BASE.extend(
 
 
 def setup_platform(
-    hass: HomeAssistant,
+    hass: HomeAssistant,  # pyright: ignore[reportUnusedParameter]
     config: ConfigType,
     add_devices: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None,  # pyright: ignore[reportUnusedParameter]
@@ -47,12 +52,24 @@ def setup_platform(
     host: str = config[CONF_HOST]
     name: str = config[CONF_NAME]
 
-    add_devices([SilvercrestSwitch(hass, host, name)], True)
+    add_devices([SilvercrestSwitch(host, name)], True)
 
 
-SILVERCREST_AES_KEY = b"0123456789abcdef"
-SILVERCREST_AES_IV = b"0123456789abcdef"
-SILVERCREST_UDP_PORT = 8530
+async def async_setup_entry(
+    hass: HomeAssistant,  # pyright: ignore[reportUnusedParameter]
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up the switch platform."""
+    async_add_entities(
+        [
+            SilvercrestSwitch(
+                entry.data[CONF_HOST],
+                entry.data[CONF_NAME],
+            )
+        ],
+        update_before_add=True,
+    )
 
 
 class SilvercrestSwitch(SwitchEntity):
@@ -61,14 +78,13 @@ class SilvercrestSwitch(SwitchEntity):
     _name: str
     _aes: Cipher[modes.CBC]
 
-    def __init__(self, hass: HomeAssistant, host: str, name: str):
+    def __init__(self, host: str, name: str):
         self._state = None
         self._host = host
         self._name = name
         self._aes = Cipher(
-            algorithms.AES(SILVERCREST_AES_KEY),
-            modes.CBC(SILVERCREST_AES_IV),
-            backend=default_backend(),
+            algorithms.AES(AES_KEY),
+            modes.CBC(AES_IV),
         )
 
     def _sendMsg(self, msg: bytes):
@@ -80,7 +96,7 @@ class SilvercrestSwitch(SwitchEntity):
         encryptor = self._aes.encryptor()
         encmsg = encryptor.update(unencmsg) + encryptor.finalize()
 
-        port = SILVERCREST_UDP_PORT
+        port = UDP_PORT
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         s.settimeout(0.5)
         s.bind(("", port))
@@ -88,7 +104,7 @@ class SilvercrestSwitch(SwitchEntity):
             s.connect((self._host, port))
             s.sendall(envelope + encmsg)
 
-            response = s.recv(1024)
+            response = s.recv(128)
             decryptor = self._aes.decryptor()
             response = decryptor.update(response[9:]) + decryptor.finalize()
             response = response[7:]
