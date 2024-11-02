@@ -3,8 +3,14 @@ Platform for Silvercrest SWS A1 Wifi Switches
 """
 
 import socket
+from typing import Any, Literal
+from typing_extensions import override
 from Crypto.Cipher import AES
 
+from functools import cached_property
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import voluptuous as vol
 
 import homeassistant.helpers.config_validation as cv
@@ -17,7 +23,6 @@ from homeassistant.const import (
     CONF_NAME,
     STATE_ON,
     STATE_OFF,
-    STATE_UNAVAILABLE,
 )
 
 DEFAULT_NAME = "Silvercrest SWS A1"
@@ -30,21 +35,29 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA_BASE.extend(
 )
 
 
-# pylint: disable=unused-argument
-def setup_platform(hass, config, add_devices, discovery_info=None):
-    host = config.get(CONF_HOST)
-    name = config.get(CONF_NAME)
+def setup_platform(
+    hass: HomeAssistant,
+    config: ConfigType,
+    add_devices: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,  # pyright: ignore[reportUnusedParameter]
+):
+    host: str = config[CONF_HOST]
+    name: str = config[CONF_NAME]
 
     add_devices([SilvercrestSwitch(hass, host, name)], True)
 
 
 class SilvercrestSwitch(SwitchEntity):
-    def __init__(self, hass, host, name):
-        self._state = ""
+    _state: None | Literal["on"] | Literal["off"]
+    _host: str
+    _name: str
+
+    def __init__(self, hass: HomeAssistant, host: str, name: str):
+        self._state = None
         self._host = host
         self._name = name
 
-    def _sendMsg(self, msg):
+    def _sendMsg(self, msg: str):
         mac = "FF FF FF FF FF FF"  # This works as broadcast
         preamble1 = bytes.fromhex("0140" + mac + "10")
         preamble2 = (
@@ -72,31 +85,37 @@ class SilvercrestSwitch(SwitchEntity):
         finally:
             s.close()
 
-    @property
+    @cached_property
+    @override
     def should_poll(self):
         return True
 
-    @property
+    @cached_property
+    @override
     def name(self):
         """Return the name of the device if any."""
         return self._name
 
     @property
-    def is_on(self):
+    @override
+    def is_on(self):  # pyright: ignore[reportIncompatibleVariableOverride]
         """Return true if switch is on."""
         return self._state == STATE_ON
 
     @property
+    @override
     def state(self):
         """Return the state of the device."""
         return self._state
 
-    def turn_on(self, **kwargs):
+    @override
+    def turn_on(self, **kwargs: dict[str, Any]):
         """Turn the switch on."""
         if self._sendMsg("01 00 00 ff ff 04 04 04 04"):
             self._state = STATE_ON
 
-    def turn_off(self, **kwargs):
+    @override
+    def turn_off(self, **kwargs: dict[str, Any]):
         """Turn the device off."""
         if self._sendMsg("01 00 00 00 ff 04 04 04 04"):
             self._state = STATE_OFF
@@ -107,4 +126,4 @@ class SilvercrestSwitch(SwitchEntity):
         if response:
             self._state = STATE_ON if (response[3] == 0xFF) else STATE_OFF
         else:
-            self._state = STATE_UNAVAILABLE
+            self._state = None
