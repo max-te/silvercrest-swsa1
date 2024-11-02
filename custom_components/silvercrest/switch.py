@@ -1,5 +1,7 @@
 """
 Platform for Silvercrest SWS A1 Wifi Switches
+
+Reference https://wiki.fhem.de/wiki/Silvercrest_SWS_A1_Wifi for protocol details.
 """
 
 import socket
@@ -69,13 +71,12 @@ class SilvercrestSwitch(SwitchEntity):
             backend=default_backend(),
         )
 
-    def _sendMsg(self, msg: str):
-        mac = "FF FF FF FF FF FF"  # This works as broadcast
-        preamble1 = bytes.fromhex("0140" + mac + "10")
-        preamble2 = (
-            "00 ff ff c1 11 71 50"  # FF FF is a package counter, if you want it.
-        )
-        unencmsg = bytes.fromhex(preamble2 + msg)
+    def _sendMsg(self, msg: bytes):
+        mac = b"\xff\xff\xff\xff\xff\xff"  # This works as broadcast
+        envelope = b"\x01\x40" + mac + b"\x10"
+
+        preamble = b"\x00\xff\xff\xc1\x11\x71\x50"  # FF FF is a package counter, if you want it.
+        unencmsg = preamble + msg
         encryptor = self._aes.encryptor()
         encmsg = encryptor.update(unencmsg) + encryptor.finalize()
 
@@ -85,7 +86,7 @@ class SilvercrestSwitch(SwitchEntity):
         s.bind(("", port))
         try:
             s.connect((self._host, port))
-            s.sendall(preamble1 + encmsg)
+            s.sendall(envelope + encmsg)
 
             response = s.recv(1024)
             decryptor = self._aes.decryptor()
@@ -123,18 +124,18 @@ class SilvercrestSwitch(SwitchEntity):
     @override
     def turn_on(self, **kwargs: dict[str, Any]):
         """Turn the switch on."""
-        if self._sendMsg("01 00 00 ff ff 04 04 04 04"):
+        if self._sendMsg(b"\x01\x00\x00\xff\xff\x04\x04\x04\x04"):
             self._state = STATE_ON
 
     @override
     def turn_off(self, **kwargs: dict[str, Any]):
         """Turn the device off."""
-        if self._sendMsg("01 00 00 00 ff 04 04 04 04"):
+        if self._sendMsg(b"\x01\x00\x00\x00\xff\x04\x04\x04\x04"):
             self._state = STATE_OFF
 
     def update(self):
         """Get the latest data from the smart plug and updates the states."""
-        response = self._sendMsg("02 00 00 00 00 04 04 04 04")
+        response = self._sendMsg(b"\x02\x00\x00\x00\x00\x04\x04\x04\x04")
         if response:
             self._state = STATE_ON if (response[3] == 0xFF) else STATE_OFF
         else:
