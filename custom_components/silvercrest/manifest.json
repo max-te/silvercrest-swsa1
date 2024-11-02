@@ -2,6 +2,8 @@
   "version": "21.1.0",
   "domain": "silvercrest",
   "name": "Silvercrest",
+  "issue_tracker": "https://github.com/max-te/silvercrest-swsa1/issues",
+  "iot_class": "local_polling",
   "documentation": "",
   "requirements": [
     "cryptography>=43.0.1"
